@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <title>Phone Dialer</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="Phone Dialer">
+        <link rel="apple-touch-icon" href="/static/icon-192.png">
+        <link rel="apple-touch-startup-image" href="/static/splash.png">
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <style>
+            .action-button {
+                width: 75vw;
+                height: 75vw;
+                max-width: 75vh;
+                max-height: 75vh;
+                border-radius: 50%;
+                border: none;
+                background: #4CAF50;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0;
+                position: fixed;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+            }
+
+            .action-button i {
+                font-size: min(20vw, 20vh);
+                color: white;
+            }
+
+            .action-button.hangup {
+                background: #f44336;
+                display: none;
+            }
+
+            #phone_container {
+                text-align: center;
+                margin: 20px;
+            }
+
+            #call_status {
+                text-align: center;
+                margin: 20px auto;
+                font-size: 1.2em;
+            }
+
+            #fullscreen_button {
+                position: fixed;
+                left: 20px;
+                bottom: 20px;
+                padding: 15px;
+                border-radius: 50%;
+                border: none;
+                background: #2196F3;
+                cursor: pointer;
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #fullscreen_button i {
+                font-size: 24px;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div id="phone_container">
+            <input type="hidden" id="phone_number" value="">
+        </div>
+        <button id="dial_button" class="action-button" onclick="dialNumber()">
+            <i class="fas fa-phone"></i>
+        </button>
+        <button id="hangup_button" class="action-button hangup" onclick="hangupCall()" data-id="">
+            <i class="fas fa-phone-slash"></i>
+        </button>
+        <!--
+        <button id="fullscreen_button" onclick="toggleFullScreen()">
+            <i class="fas fa-expand"></i>
+        </button>
+        -->
+        <!--<div id="call_status"></div>-->
+
+        <script>
+            function getSipUriFromParams() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get('uri') || 'sip:segland@dev.cantina.video:1061;transport=tls';
+            }
+
+            function getSwmlUrlFromParams() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get('swml_url') || '{{ env_swml_url }}';
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                const phoneNumberInput = document.getElementById('phone_number');
+                phoneNumberInput.value = getSipUriFromParams();
+
+                // Check if there's an active call on page load
+                const activeCallId = '{{ active_call_id }}';
+                if (activeCallId !== 'None' && activeCallId) {
+                    $('#dial_button').hide();
+                    $('#hangup_button').show().attr('data-id', activeCallId);
+                    $('#call_status').text('Call in progress...');
+                }
+            });
+
+            function dialNumber() {
+                const dialButton = $('#dial_button');
+                if (dialButton.prop('disabled')) return;
+                dialButton.prop('disabled', true);
+                const icon = dialButton.find('i');
+                icon.removeClass('fa-phone').addClass('fa-spinner fa-spin');
+
+                const phoneNumber = document.getElementById('phone_number').value;
+                const swmlUrl = getSwmlUrlFromParams();
+                $('#call_status').text('Dialing...');
+
+                $.ajax({
+                    url: '/dial',
+                    method: 'POST',
+                    data: { phone_number: phoneNumber, swml_url: swmlUrl },
+                    success: function (response) {
+                        console.log('Dial response:', response);  // Debug log
+
+                        if (response.id) {
+                            $('#hangup_button').attr('data-id', response.id);
+                            console.log('Call ID set:', response.id);  // Debug log
+                        } else {
+                            console.error('No call ID in response');  // Debug log
+                        }
+
+                        setTimeout(() => {
+                            $('#call_status').text('Call in progress...');
+                            dialButton.hide();
+                            $('#hangup_button').show();
+                            dialButton.prop('disabled', false);
+                            icon.removeClass('fa-spinner fa-spin').addClass('fa-phone');
+                        }, 5000);
+                    },
+                    error: function (xhr) {
+                        $('#call_status').text('Error: ' + (xhr.responseJSON?.error || xhr.statusText));
+                        dialButton.prop('disabled', false);
+                        icon.removeClass('fa-spinner fa-spin').addClass('fa-phone');
+                    }
+                });
+            }
+
+            function hangupCall() {
+                const hangupButton = $('#hangup_button');
+                if (hangupButton.prop('disabled')) return;
+                hangupButton.prop('disabled', true);
+
+                const icon = hangupButton.find('i');
+                icon.removeClass('fa-phone-slash').addClass('fa-spinner fa-spin');
+
+                const callId = hangupButton.attr('data-id');
+                console.log('Hangup called with callId:', callId);  // Debug log
+
+                if (!callId) {
+                    console.log('No callId found, ending call without server request');  // Debug log
+                    $('#call_status').text('Call ended');
+                    setTimeout(() => {
+                        hangupButton.hide();
+                        $('#dial_button').show();
+                        hangupButton.prop('disabled', false);
+                        icon.removeClass('fa-spinner fa-spin').addClass('fa-phone-slash');
+                    }, 2500);
+                    return;
+                }
+
+                console.log('Sending hangup request to server...');  // Debug log
+                $.ajax({
+                    url: '/hangup',
+                    method: 'POST',
+                    data: { call_id: callId },
+                    success: function (response) {
+                        console.log('Hangup success:', response);  // Debug log
+                        $('#call_status').text('Call ended successfully');
+                        setTimeout(() => {
+                            hangupButton.hide().attr('data-id', '');
+                            $('#dial_button').show();
+                            hangupButton.prop('disabled', false);
+                            icon.removeClass('fa-spinner fa-spin').addClass('fa-phone-slash');
+                        }, 2500);
+                    },
+                    error: function (xhr) {
+                        console.log('Hangup error:', xhr);  // Debug log
+                        $('#call_status').text('Error ending call: ' + (xhr.responseJSON?.error || xhr.statusText));
+                        setTimeout(() => {
+                            hangupButton.hide().attr('data-id', '');
+                            $('#dial_button').show();
+                            hangupButton.prop('disabled', false);
+                            icon.removeClass('fa-spinner fa-spin').addClass('fa-phone-slash');
+                        }, 2500);
+                    }
+                });
+            }
+
+            function toggleFullScreen() {
+                const icon = document.querySelector('#fullscreen_button i');
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().then(() => {
+                        icon.classList.remove('fa-expand');
+                        icon.classList.add('fa-compress');
+                    });
+                } else {
+                    document.exitFullscreen().then(() => {
+                        icon.classList.remove('fa-compress');
+                        icon.classList.add('fa-expand');
+                    });
+                }
+            }
+        </script>
+    </body>
+
+</html>

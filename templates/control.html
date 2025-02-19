@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <title>AI Control</title>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                font-size: 24px;
+            }
+
+            .container {
+                width: 100%;
+                margin: 0;
+                padding: 10px;
+                box-sizing: border-box;
+            }
+
+            label, h1 {
+                font-size: 22px; /* Further increased font size for labels and headings */
+            }
+
+            .form-group {
+                margin-bottom: 15px;
+            }
+
+            label {
+                display: block;
+                margin-bottom: 5px;
+            }
+
+            textarea {
+                width: 100%;
+                height: 200px;
+                font-size: 24px;
+                padding: 15px;
+                box-sizing: border-box;
+                border-radius: 8px;
+            }
+
+            select {
+                width: 100%;
+                height: 50px;
+                font-size: 24px;
+                padding: 10px;
+                border-radius: 8px;
+            }
+
+            button {
+                width: 100%;
+                height: 50px;
+                font-size: 24px;
+                margin-top: 10px;
+            }
+
+            button:hover {
+                background-color: #0056b3;
+            }
+
+
+        </style>
+    </head>
+
+    <body>
+        <div class="container">
+            <h1>AI Control</h1>
+            <form id="messageForm">
+                <div class="form-group">
+                    <label for="content">Message Content:</label>
+                    <textarea id="content" name="content" required cols="15"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="role">Role:</label>
+                    <select id="role" name="role" required>
+                        <option value="user">User</option>
+                        <option value="system">System</option>
+                    </select>
+                </div>
+
+                <button type="submit">Send Message</button>
+            </form>
+
+            <div id="response"></div>
+        </div>
+
+        <script>
+            $(document).ready(function () {
+                $('#messageForm').on('submit', function (e) {
+                    e.preventDefault();
+
+                    $.ajax({
+                        url: '/message',
+                        method: 'POST',
+                        data: {
+                            content: $('#content').val(),
+                            role: $('#role').val()
+                        },
+                        success: function (response) {
+                            $('#response').html(
+                                '<pre>' + JSON.stringify(response, null, 2) + '</pre>'
+                            ).show();
+                            $('#content').val(''); // Clear the text box
+                        },
+                        error: function (xhr, status, error) {
+                            var errorMessage = xhr.responseJSON ? xhr.responseJSON.error : 'Error: ' + error;
+                            $('#response').html(
+                                errorMessage
+                            ).show();
+                        }
+                    });
+                });
+
+                $('#content').on('keypress', function (e) {
+                    if (e.which === 13 && !e.shiftKey) { // Check for Enter key without Shift
+                        e.preventDefault();
+                        $('#messageForm').submit(); // Trigger form submission
+                    }
+                });
+            });
+        </script>
+    </body>
+
+</html>
